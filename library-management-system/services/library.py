@@ -1,7 +1,7 @@
 from models.Book import Book
 from models.User import User
 from models.BorrowHistory import BorrowHistory
-from datetime import datetime
+from datetime import datetime,timedelta
 
 """
 Service layer for managing library operations.
@@ -35,7 +35,12 @@ class Library:
 
     def find_book(self,book_id):
 
+        if book_id not in self.books:
+
+            raise ValueError("Book not found.")
+
         return self.books.get(book_id)
+    
 
     # --- USER OPERATIONS --- #
 
@@ -47,10 +52,14 @@ class Library:
         self.users[user.user_id] = user
     
     def find_user(self,user_id):
+        if user_id not in self.users:
+
+            raise ValueError("User not found.")
 
         return self.users.get(user_id)
     
-    # --- BORROWHISTORY OPERATIONS --- #
+   
+    # --- BORROW HISTORY OPERATIONS --- #
 
     def find_borrow_history(self,borrow_id):
 
@@ -76,20 +85,26 @@ class Library:
                 
                 raise ValueError("No available copies left")
 
+        active_borrows = self.get_user_active_borrows(user_id)
+
+        if len(active_borrows) >= user.max_books_per_user:
+
+            raise ValueError("The book limit has been exceeded.")
         
+        else:
 
-        book.available_copies -= 1
+            book.available_copies -= 1
 
-        borrow_id = self.next_borrow_id
-        self.next_borrow_id += 1
+            borrow_id = self.next_borrow_id
+            self.next_borrow_id += 1
 
-        borrow_date = datetime.now()
+            borrow_date = datetime.now()
 
-        borrow_history = BorrowHistory(borrow_id,user_id,book_id,borrow_date)
+            borrow_history = BorrowHistory(borrow_id,user_id,book_id,borrow_date)
 
-        self.borrowRecords[borrow_id] = borrow_history
+            self.borrowRecords[borrow_id] = borrow_history
 
-        return borrow_history
+            return borrow_history
 
 
     def return_book(self,borrow_id):
@@ -107,5 +122,62 @@ class Library:
         book = self.find_book(borrow_record.book_id)
         book.available_copies += 1
 
-        return borrow_record
+        fine = borrow_record.calculate_overdue_fine(self)
 
+        return borrow_record, fine
+
+    
+    # --- ACTIVE BORROW OPERATIONS --- #
+    def get_active_borrows(self):
+
+        return [
+            borrow
+            for borrow in self.borrowRecords.values()
+            if borrow.is_active()
+        ]
+    
+    def get_user_active_borrows(self,user_id):
+        user = self.find_user(user_id)
+
+        return [
+            borrow
+            for borrow in self.borrowRecords.values()
+            if borrow.user_id == user.user_id and borrow.is_active()
+        ]
+    
+    def get_book_active_borrows(self,book_id):
+
+        book = self.find_bookind_book(book_id)
+        return [
+            borrow
+            for borrow in self.borrowRecords.values()
+            if borrow.book_id == book.book_id and borrow.is_active()
+        ]
+    
+    # --- OVERDUE OPERATIONS --- #
+
+    def get_user_overdue_borrows(self,user_id):
+
+        self.find_user(user_id)
+
+        return [
+            borrow
+            for borrow in self.borrowRecords.values()
+            if borrow.user_id == user_id and borrow.is_active()
+            and datetime.now() > borrow.due_date
+        ]
+    
+    def get_book_overdue_borrows(self):
+
+        return [
+            borrow
+            for borrow in self.borrowRecords.values()
+            if borrow.is_active() and datetime.now() > borrow.due_date
+        ]
+
+    # --- FINE OPERATIONS --- #
+   
+
+
+
+   
